@@ -1,0 +1,25 @@
+#!/bin/sh
+
+if [[ $OPT = yes ]]; then
+    CFLAGS="$CFLAGS -O3"
+else
+    CFLAGS="$CFLAGS -Os -g0"
+    LDFLAGS="$LDFLAGS -Wl,--gc-sections"
+fi
+
+if [[ $SECURE = yes ]]; then
+    CFLAGS="$CFLAGS -fPIE -fstack-protector"
+    LDFLAGS="$LDFLAGS -fpie"
+fi
+
+if [[ $STATIC = yes ]]; then
+    LDFLAGS="$LDFLAGS -static"
+
+    unset $STATIC
+fi
+
+unset $OPT $SECURE
+
+export CFLAGS LDFLAGS
+export CPPFLAGS=$CFLAGS
+export CXXFLAGS=$CFLAGS

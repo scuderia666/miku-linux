@@ -1,0 +1,8 @@
+ver=1.3.1
+src=http://ftp.gnu.org/gnu/termcap/termcap-$ver.tar.gz
+
+CFLAGS="-D_GNU_SOURCE -fPIC $CFLAGS"
+
+postinstall() {
+  cp termcap.src $ETC/termcap
+}

@@ -1,0 +1,18 @@
+src=http://thrysoee.dk/editline/libedit-20191231-3.1.tar.gz
+deps=(termcap)
+
+CFLAGS="-D_GNU_SOURCE -D_BSD_SOURCE -D__STDC_ISO_10646__ $CFLAGS"
+
+configure() {
+  $CONFIGURE --enable-widec
+}
+
+postinstall() {
+  cp libedit.a $LIB/libreadline.a
+  cp libedit.so $LIB/libreadline.so
+
+  #mkdir -p $INCLUDE/readline
+
+  #touch $INCLUDE/readline/history.h
+  #touch $INCLUDE/readline/tilde.h
+}

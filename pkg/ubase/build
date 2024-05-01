@@ -1,0 +1,4 @@
+src=git://git.suckless.org/ubase
+files=(who)
+
+STATIC=yes

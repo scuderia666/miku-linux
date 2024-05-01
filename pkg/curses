@@ -1,0 +1,2 @@
+option=CURSES
+options=(netbsd-curses ncurses)

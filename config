@@ -1,0 +1,18 @@
+# General config
+
+# base-suckless/base-gnu
+#USERLAND=base-gnu
+
+# awesome/xfce
+DESKTOP=awesome
+
+# Other stuff
+
+OPT=yes
+SECURE=yes
+
+JOBS=
+PREFIX=
+
+DEBUG=yes
+SILENT=yes

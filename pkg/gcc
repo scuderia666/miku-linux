@@ -1,0 +1,10 @@
+ver=10.2.0
+src=https://ftp.gnu.org/gnu/gcc/gcc-$ver/gcc-$ver.tar.xz
+
+configure() {
+  $CONFIGURE --with-arch=$ARCH \
+    --libdir=$LIB_PREFIX \
+    --libexecdir=$LIB_PREFIX \
+    --enable-threads=posix \
+    --enable-languages=c,c++,lto
+}

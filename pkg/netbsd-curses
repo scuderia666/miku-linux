@@ -1,0 +1,17 @@
+ver=0.3.1
+src=http://ftp.barfooze.de/pub/sabotage/tarballs/netbsd-curses-$ver.tar.xz
+deps=(libc)
+files=(libcurses/libcurses.so)
+
+configure() {
+cat << EOF > config.mak
+CC=$CC
+HOSTCC=$HOSTCC
+AR=ar
+RANLIB=ranlib
+CFLAGS=$CFLAGS
+LDFLAGS=$LDFLAGGS
+PREFIX=$PREFIX
+DESTDIR=$ROOT
+EOF
+}

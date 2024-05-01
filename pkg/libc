@@ -1,0 +1,2 @@
+option=LIBC
+options=(musl)

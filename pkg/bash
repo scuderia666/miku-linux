@@ -1,0 +1,10 @@
+ver=5.1
+src=https://ftp.gnu.org/gnu/bash/bash-$ver.tar.gz
+files=(bash)
+
+configure() {
+  $CONFIGURE \
+    --without-bash-malloc \
+    --disable-rpath \
+    --disable-nls
+}

@@ -1,0 +1,64 @@
+#!/bin/sh
+
+export ARCH=x86_64
+
+#export CC=clang
+#export CXX=clang++
+export CC=gcc
+export CXX=g++
+
+export TARGET=$ARCH-linux-musl
+export HOST=`$CC -dumpmachine`
+    
+#export AR=llvm-ar
+#export AS=llvm-as
+#export RANLIB=llvm-ranlib
+#export STRIP=llvm-strip
+
+export AR=$HOST-gcc-ar
+export RANLIB=$HOST-gcc-ranlib
+
+export LC_ALL=POSIX
+
+export BUILDFLAGS="--build=$HOST --host=$TARGET"
+export TOOLFLAGS="$BUILDFLAGS --target=$TARGET"
+export PERLFLAGS="--target=$TARGET"
+
+export HOSTCC=$CC
+
+################################################
+
+preffered=`nproc`
+max=$(($preffered+1))
+
+if [[ -z $JOBS ]] || (($JOBS > $max)); then
+    JOBS=$preffered
+fi
+
+if [[ -z $PREFIX ]]; then
+    PREFIX=/usr
+fi
+
+ROOT=$CWD/..
+
+CONFIGURE="./configure --prefix=$PREFIX"
+MAKE="make -j$JOBS"
+INSTALL="$MAKE DESTDIR=$ROOT install"
+
+BIN_PREFIX=$PREFIX/bin
+BIN=$ROOT$BIN_PREFIX
+
+ETC_PREFIX=$PREFIX/etc
+ETC=$ROOT$ETC_PREFIX
+
+INCLUDE_PREFIX=$PREFIX/include
+INCLUDE=$ROOT$INCLUDE_PREFIX
+
+LIB_PREFIX=$PREFIX/lib
+LIB=$ROOT$LIB_PREFIX
+
+SHARE_PREFIX=$PREFIX/share
+SHARE=$ROOT$LIB_PREFIX
+
+MAN_PREFIX=$SHARE_PREFIX/man
+MAN=$ROOT$MAN_PREFIX

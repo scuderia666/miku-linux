@@ -1,0 +1,634 @@
+#!/bin/sh
+
+CWD=$(dirname `readlink -f $0`)
+. $CWD/log
+
+entry_exists(){
+	[[ ! -e $PKGS ]] && \
+		return 1
+
+	return `grep -Fxq $1 $PKGS`
+}
+
+add_entry(){
+	[[ ! -e $PKGS ]] && \
+		return 1
+
+	echo $1 >> $PKGS
+	return 0
+}
+
+read_setting(){
+	if [[ ! -e $2 ]]; then
+		echo ""
+		return
+	fi
+
+	line=`grep "^${1}=" $2`
+
+	if [[ ${line:0:1} == "#" ]]; then
+		echo ""
+		return
+	fi
+
+	echo ${line#*=}
+}
+
+array_contains(){
+		local seeking=$1; shift
+		local in=1
+		for element; do
+				if [[ $element == $seeking ]]; then
+						in=0
+						break
+				fi
+		done
+		return $in
+}
+
+fn_exists(){
+	if type $1 2>/dev/null | grep -q 'function'; then
+		return 0
+	fi
+
+	return 1
+}
+
+config(){
+	if [[ ! -e /bin/gcc ]]; then
+		info "gcc not found, wtf"
+		exit 1
+	fi
+
+	PKGDIR=$CWD/../pkg
+	SRC=$CWD/../src
+	PKGS=$CWD/../pkgs
+
+	BUILD=$SRC/build
+	DL=$SRC/dl
+
+	if [[ -e $SRC/config ]]; then
+		. $SRC/config
+	fi
+
+	if [[ $DEBUG != yes ]]; then
+		SILENT=yes
+	fi
+}
+
+config_pkg(){
+	local pkg=$1
+	
+	local file=`read_recipe $pkg`
+
+	local settings=(STATIC OPT SECURE)
+
+	for setting in ${settings[@]}; do
+		unset $setting
+	done
+
+	for setting in ${settings[@]}; do
+		local value=`read_setting $setting $file`
+
+		if [[ -z $value ]]; then
+			continue
+		fi
+
+		eval local $setting=$value
+	done
+
+	[[ -z $OPT ]] && OPT=yes
+	[[ -z $SECURE ]] && SECURE=yes
+
+	. $CWD/flags
+	. $file
+}
+
+read_recipe(){
+	local pkg=$1
+
+	local pkgdir=$PKGDIR/$pkg
+
+	local small
+
+	[[ -e $pkgdir ]] && \
+		small=yes
+
+	[[ -d $pkgdir ]] && \
+		small=no
+
+	[[ -z $small ]] && \
+		echo "" && return
+
+	if [[ $small = yes ]]; then
+		echo $pkgdir
+	else
+		echo $pkgdir/build
+	fi
+}
+
+is_group(){
+	[[ -z $(read_setting options `read_recipe $1`) ]] && return 1 || return 0
+}
+
+option_set(){
+	[[ -z `get_option_value $1` ]] && return 1 || return 0
+}
+
+get_option_value(){
+	local option=`get_option $1`
+
+	echo ${!option}
+}
+
+get_option(){
+	echo `read_setting option $PKGDIR/$1`
+}
+
+set_option(){
+	local option=`get_option $1`
+	local choose=$2
+
+	[[ -z $option ]] || [[ -z $choose ]] && return 1
+
+	eval $option=$choose
+
+	return 0
+}
+
+get_choose(){
+	local name=$1
+
+	if is_group $name; then
+		eval local options=`read_setting options $PKGDIR/$name`
+
+		if [[ -z $options ]]; then
+			echo ""
+			return
+		fi
+
+		local choose=`get_option_value $name`
+
+		# default
+		if [[ -z $choose ]]; then
+			temp=$options
+			set -- $temp
+			choose=$1
+		fi
+
+		if array_contains $choose ${options[@]}; then
+			echo $choose
+		else
+			echo ""
+		fi
+	fi
+}
+
+pkg_exists(){
+	[[ -z `read_recipe $1` ]] && return 1 || return 0
+}
+
+pkg_installed(){
+	local pkg=$1
+
+	if ! pkg_exists $pkg; then
+		return 1
+	fi
+
+	if is_group $pkg; then
+		eval local options=`read_setting options $PKGDIR/$pkg`
+
+		for option in ${options[@]}; do
+			if entry_exists $option; then
+				echo $option
+				return 0
+			fi
+		done
+	else
+		return `entry_exists $pkg`
+	fi
+
+	return 1
+}
+
+install_pkg(){
+	local pkgs=()
+
+	for pkg in $@; do
+		if ! array_contains $pkg ${pkgs[@]}; then
+			pkgs+=($pkg)
+		fi
+	done
+
+	[[ ${pkgs[@]} ]] || return 1
+
+	config
+
+	local list=()
+
+	for pkg in ${pkgs[@]}; do
+		local file=`read_recipe $pkg`
+
+		if [[ -z $file ]]; then
+			info "package $pkg doesnt exist"
+			continue
+		fi
+
+		list+=($pkg)
+	done
+
+	[[ ${list[@]} ]] || return 1
+
+	. $CWD/vars
+
+	local error=no
+
+	for pkg in ${list[@]}; do
+		if ! pkg_install $pkg; then
+			error=yes
+		fi
+	done
+
+	[[ $error = yes ]] && return 1 || return 0
+}
+
+ask_options(){
+	local pkg=$1
+	return
+}
+
+pkg_install(){
+	local pkg=$1
+
+	if is_group $pkg; then
+		local name=`pkg_installed $pkg`
+
+		if [[ ! -z $name ]]; then
+			info "group $pkg is installed as $name"
+			return 0
+		fi
+
+		if ! option_set $pkg && [[ ! -z `get_option $pkg` ]]; then
+			ask_options $pkg
+		fi
+
+		local choose=`get_choose $pkg`
+
+		if [[ -z $choose ]]; then
+			info "option is set wrong: $pkg"
+			return 1
+		fi
+
+		if ! pkg_exists $choose; then
+			info "option $choose package doesnt exist: $pkg"
+			return 1
+		fi
+
+		if pkg_install $choose; then
+			add_entry $choose
+			return 0
+		fi
+
+		return 1
+	fi
+
+	if pkg_installed $pkg; then
+		info "package $pkg is already installed"
+		return 0
+	fi
+
+	local file=`read_recipe $pkg`
+
+	local small=yes
+
+	if [[ $file == *"build"* ]]; then
+		small=no
+	fi
+
+	local settings=(name ver src deps files)
+
+	for setting in ${settings[@]}; do
+		unset $setting
+	done
+
+	for setting in ${settings[@]}; do
+		local value=`read_setting $setting $file`
+
+		if [[ -z $value ]]; then
+			continue
+		fi
+
+		eval local $setting=$value
+	done
+
+	local git=no
+
+	if [[ ! -z $src ]]; then
+		local filename=`basename $src`
+
+		if [[ $src == *"git"* ]] && [[ $filename != *"."* ]]; then
+			git=yes
+			unset $filename
+		fi
+	fi
+
+	local pkgtype
+
+	if [[ $git = yes ]]; then
+		pkgtype=git
+	elif [[ ! -z $src ]]; then
+		pkgtype=normal
+	elif [[ ! -z $deps ]]; then
+		pkgtype=group
+	else
+		info "empty package: $pkg"
+		return 1
+	fi
+
+	if [[ ! -z $deps ]]; then
+		local error=no
+
+		for dep in ${deps[@]}; do
+			if ! pkg_exists $dep; then
+				info "dependency $dep of pkg doesnt exist: $pkg"
+				continue
+			fi
+
+			if ! pkg_install $dep; then
+				info "dep of pkg $pkg error: $dep"
+				error=yes
+				break
+			fi
+		done
+
+		[[ $error = yes ]] && return 1
+		[[ $pkgtype = group ]] && return 0
+	fi
+
+	for setting in ${settings[@]}; do
+		unset $setting
+	done
+
+	for setting in ${settings[@]}; do
+		local value=`read_setting $setting $file`
+
+		if [[ -z $value ]]; then
+			continue
+		fi
+
+		eval local $setting=$value
+	done
+
+	[[ -z $files ]] && [[ $DEBUG != yes ]] && \
+		info "missing files setting" && return 1
+
+	local pkgdir=$PKGDIR/$pkg
+
+	if [[ $small = no ]]; then
+		STUFF=$pkgdir/stuff
+	fi
+
+	local name
+
+	if [[ -z $ver ]]; then
+		name=$pkg
+	else
+		name=$pkg-$ver
+	fi
+
+	info "installing: $name"
+
+	local work=$BUILD/$name
+
+	if [[ ! -d $work ]]; then
+		if [[ $git = yes ]]; then
+			cd $BUILD
+
+			command="git clone $src $name --recurse-submodules"
+		else
+			cd $DL
+
+			command="wget --no-check-certificate $src -O $filename"
+		fi
+
+		if [[ $SILENT = yes ]]; then
+			$command &>/dev/null
+		else
+			$command
+		fi
+
+		cd $CWD
+	fi
+
+	if [[ $pkgtype = normal ]]; then
+		if [[ ! -e $DL/$filename ]]; then
+			info "failed to download package: $pkg"
+			return 1
+		else
+			cd $DL
+
+			if [[ $filename != *"zip"* ]]; then
+				mkdir $work
+			fi
+
+			case $filename in
+			*.zip) unzip $filename -d $work &>/dev/null ; ;;
+			*.tgz|*.gz) tar xzvf $filename -C $work --strip-components 1 &>/dev/null ; ;;
+			*.tbz2|*.bz2) tar xjvf $filename -C $work --strip-components 1 &>/dev/null ; ;;
+			*.xz) tar xf $filename -C $work --strip-components 1 &>/dev/null ; ;;
+			esac
+
+			cd $CWD
+		fi
+	fi
+
+	if [[ ! -d $work ]]; then
+		if [[ $pkgtype = normal ]]; then
+			info "failed to extract package $pkg"
+		else
+			info "failed to clone git repo $pkg"
+		fi
+
+		return 1
+	fi
+
+	if `check_installed $work $files`; then
+		info "installed missing built package: $name"
+		add_entry $pkg
+		return 0
+	fi
+
+	config_pkg $pkg
+
+	if [[ -d $pkgdir/files ]]; then
+		cp -rf $pkgdir/files/. $work
+	fi
+
+	if [[ -d $pkgdir/patches ]]; then
+		for patch in $pkgdir/patches/*; do
+			patch -d $work -p1 < $patch &>/dev/null
+		done
+	fi
+
+	cd $work
+
+	info "configuring $pkg"
+
+	if fn_exists preconfigure; then
+		preconfigure
+	fi
+
+	if ! fn_exists configure; then
+		if [[ -e CMakeLists.txt ]]; then
+			mkdir build
+			cd build
+
+			local command="cmake -DCMAKE_INSTALL_PREFIX=$PREFIX .." 
+
+			if [[ $SILENT = yes ]]; then
+				$command &>/dev/null
+			else
+				$command
+			fi
+
+			cd ..
+		elif [[ -e configure ]]; then
+			$CONFIGURE
+		fi
+	else
+		if [[ $SILENT = yes ]]; then
+			configure &>/dev/null
+		else
+			configure
+		fi
+	fi
+
+	info "building $pkg"
+
+	if ! fn_exists build; then
+		local makefile
+
+		if [[ -e Makefile ]]; then
+			makefile=Makefile
+		fi
+
+		if [[ -e GNUmakefile ]]; then
+			makefile=GNUmakefile
+		fi
+
+		if [[ -e $makefile ]]; then
+			if [[ $SILENT = yes ]]; then
+				$MAKE &>/dev/null
+			else
+				$MAKE
+			fi
+		else
+			error "no build() in package $pkg"
+		fi
+	else
+		if [[ $SILENT = yes ]]; then
+			build &>/dev/null
+		else
+			build
+		fi
+	fi
+
+	info "packaging $pkg"
+
+	if ! fn_exists install; then
+		local makefile
+
+		if [[ -e Makefile ]]; then
+			makefile=Makefile
+		fi
+
+		if [[ -e GNUmakefile ]]; then
+			makefile=GNUmakefile
+		fi
+
+		if [[ -e $makefile ]]; then
+			grep -q 'install:' $makefile &>/dev/null
+
+			if [ $? -eq 0 ]; then
+				if [[ $SILENT = yes ]]; then
+					$INSTALL &>/dev/null
+				else
+					$INSTALL
+				fi
+			fi
+		fi
+	else
+		if [[ $SILENT = yes ]]; then
+			install &>/dev/null
+		else
+			install
+		fi
+	fi
+
+	if fn_exists postinstall; then
+		postinstall
+	fi
+
+	cd $CWD
+
+	if check_installed $work $files; then
+		info "$name installed successfully"
+		add_entry $pkg
+		return 0
+	fi
+
+	return 1
+}
+
+check_installed(){
+	local work=$1
+	local files=$2
+
+	if [[ -d $work ]]; then
+		cd $work
+
+		for file in "${files[@]}"; do
+			[[ -d $file ]] || [[ -e $file ]] && return 0
+		done
+
+		cd $CWD
+	fi
+
+	return 1
+}
+
+remove_pkg(){
+	local pkgs=()
+
+	for pkg in $@; do
+		if ! array_contains $pkg ${pkgs[@]}; then
+			pkgs+=($pkg)
+		fi
+	done
+
+	config
+
+	local list=()
+
+	for pkg in ${pkgs[@]}; do
+		echo $pkg
+	done
+}
+
+help(){
+	info "todo"
+}
+
+main(){
+	action=$1 && shift
+
+	case $action in
+	-i) install_pkg $@ ; ;;
+	-r) remove_pkg $@ ; ;;
+	*) help ; ;;
+	esac
+}
+
+main $@
+
+exit 0

@@ -1,0 +1,22 @@
+ver=1.2.2
+src=https://musl.libc.org/releases/musl-$ver.tar.gz
+files=(lib/libc.so)
+
+configure() {
+  mkdir -p $LIB
+
+  $CONFIGURE $TOOLFLAGS \
+    --syslibdir=$LIB_PREFIX \
+    --enable-wrapper=all \
+    --enable-optimize=size
+}
+
+postinstall() {
+  ln -sf libc.so $LIB/ld-linux-x86-64.so.2
+  ln -sf libc.so $LIB/libc.so.6
+
+  mkdir -p $BIN
+  ln -sf ../lib/libc.so $BIN/ldd
+
+  echo $LIB_PREFIX >> $ETC/ld-musl-$ARCH.path
+}

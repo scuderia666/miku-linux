@@ -1,0 +1,10 @@
+#!/bin/sh
+
+info(){
+    echo $@
+}
+
+error(){
+    echo $@
+    exit 1
+}

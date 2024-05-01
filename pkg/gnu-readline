@@ -1,0 +1,12 @@
+ver=7.0
+src=https://ftp.gnu.org/gnu/readline/readline-$ver.tar.gz
+deps=(termcap)
+files=(libreadline.a)
+
+CPPFLAGS="-D_GNU_SOURCE"
+CXXFLAGS=$CFLAGS
+LDFLAGS="$LDFLAGS -Wl,-rpath-link=$LIB_PREFIX"
+
+configure() {
+  $CONFIGURE --disable-nls
+}

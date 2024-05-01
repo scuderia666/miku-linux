@@ -1,0 +1,2 @@
+option=USERLAND
+options=(base-suckless base-gnu)

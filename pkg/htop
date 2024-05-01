@@ -1,0 +1,2 @@
+ver=2.0.1
+src=http://hisham.hm/htop/releases/$ver/htop-$ver.tar.gz

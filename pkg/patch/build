@@ -1,0 +1,11 @@
+ver=2.7.6
+src=http://ftp.gnu.org/gnu/patch/patch-$ver.tar.xz
+
+CC="$CC -static"
+
+STATIC=yes
+
+preconfigure() {
+  GNULIB_CPPFLAGS=$($STUFF/gnulibfix lib)
+  CFLAGS="-D_GNU_SOURCE -Werror-implicit-function-declaration $CFLAGS $GNULIB_CPPFLAGS"
+}
